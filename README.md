@@ -72,15 +72,15 @@ My proposal for the next step of this project is to look for a way to get a real
 
 After that come the simpler things: linking the planner to the iPhone calendar, so outfits can be tied to your real events, suggesting outfits based on the weather, and sync between devices.
 
-This needs time and resources that I do not have alone. I am looking for people who want to work on it with me. If you are interested, write to me: [[email / LinkedIn]]
+This needs time and resources that I do not have alone. I am looking for people who want to work on it with me. If you are interested, write to me: [gattuso008@libero.it]
 
 ## Running it
 
 You need a Mac with Xcode and iOS 17 or later.
 
 ```
-git clone https://github.com/[[username]]/[[repo]].git
-open [[ProjectName]].xcodeproj
+  git clone https://github.com/lightskinF/outfit-planner-ios.git
+  open V3_Final.xcodeproj
 ```
 
 Run on a simulator or a device. The camera only works on a real device; in the simulator you can pick photos from the library. No keys or configuration needed.
