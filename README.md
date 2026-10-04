@@ -4,7 +4,7 @@ An iOS app where you photograph your clothes, try them on a virtual avatar, save
 
 The concept is mine and I led the project, from the first idea to the final presentation, which I gave in English.
 
-Demo video: [[link will be provided soon]]
+Demo video: [https://youtube.com/shorts/cQxEbVqXol0]
 
 
 ## Why I wanted to build this
