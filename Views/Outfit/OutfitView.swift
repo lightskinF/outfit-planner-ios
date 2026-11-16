@@ -24,88 +24,6 @@ private extension Color {
     }
 }
 
-// MARK: - Try-On Combo Lookup
-struct TryOnLookup {
-    enum Shirt   { case white, grey, darkBlue }
-    enum Bottom  { case khaki, blackJeans, blueJeans }
-    enum Shoes   { case barefoot, blackChelsea, puma }
-
-    private static func searchString(for item: ClothingItem?) -> String {
-        guard let item else { return "" }
-        return [item.name, item.builtInImageName, item.imageFileName, item.brand]
-            .joined(separator: " ")
-            .lowercased()
-    }
-
-    static func shirtKey(for item: ClothingItem?) -> Shirt {
-        guard item != nil else { return .white }
-        let s = searchString(for: item)
-        if s.contains("dark_blue_shirt") { return .darkBlue }
-        if s.contains("grey_shirt")      { return .grey }
-        if s.contains("dark blue") || s.contains("dark") || s.contains("navy") { return .darkBlue }
-        if s.contains("grey") || s.contains("gray") { return .grey }
-        if s.contains("blue") && s.contains("shirt") { return .darkBlue }
-        return .white
-    }
-
-    static func bottomKey(for item: ClothingItem?) -> Bottom {
-        guard item != nil else { return .khaki }
-        let s = searchString(for: item)
-        if s.contains("black_jeans") { return .blackJeans }
-        if s.contains("blue_jeans")  { return .blueJeans }
-        if s.contains("black") { return .blackJeans }
-        if s.contains("blue")  { return .blueJeans }
-        return .khaki
-    }
-
-    static func shoesKey(for item: ClothingItem?) -> Shoes {
-        guard item != nil else { return .barefoot }
-        let s = searchString(for: item)
-        if s.contains("puma") || s.contains("sneaker") || s.contains("trainer") || s.contains("running") || s.contains("puma_shoes") { return .puma }
-        if s.contains("black_chelsea_shoes") || s.contains("chelsea") || s.contains("boot") || s.contains("black") || s.contains("leather") { return .blackChelsea }
-        return .barefoot
-    }
-
-    static func assetName(shirt: Shirt, bottom: Bottom, shoes: Shoes) -> String {
-        switch (shirt, bottom, shoes) {
-        case (.white, .khaki,      .barefoot):     return "Human_Mannequin"
-        case (.white, .khaki,      .blackChelsea): return "Black Boots AI"
-        case (.white, .khaki,      .puma):         return "Puma Shoes AI"
-        case (.white, .blackJeans, .barefoot):     return "Black Jeans AI"
-        case (.white, .blackJeans, .blackChelsea): return "Black Jeans AI"
-        case (.white, .blackJeans, .puma):         return "Black Jeans AI"
-        case (.white, .blueJeans,  .barefoot):     return "Blue Jeans AI"
-        case (.white, .blueJeans,  .blackChelsea): return "Blue Jeans AI"
-        case (.white, .blueJeans,  .puma):         return "Blue Jeans AI"
-        case (.grey, .khaki,      .barefoot):     return "Grey Shirt AI"
-        case (.grey, .khaki,      .blackChelsea): return "Black Boots AI"
-        case (.grey, .khaki,      .puma):         return "Puma Shoes AI"
-        case (.grey, .blackJeans, .barefoot):     return "Grey Shirt_Black Jeans AI"
-        case (.grey, .blackJeans, .blackChelsea): return "Grey Shirt_Black Jeans_Black Shoes AI"
-        case (.grey, .blackJeans, .puma):         return "Grey Shirt_Black Jeans_Puma Shoes AI"
-        case (.grey, .blueJeans,  .barefoot):     return "Grey Shirt_Blu Jeans AI"
-        case (.grey, .blueJeans,  .blackChelsea): return "Grey SHhirt_Blue Jeans_Black Boots AI"
-        case (.grey, .blueJeans,  .puma):         return "Grey Shirt_Blue Jeans_Puma Shoes AI"
-        case (.darkBlue, .khaki,      .barefoot):     return "Dark Blue Shirt AI"
-        case (.darkBlue, .khaki,      .blackChelsea): return "Dark Blue_Black Shirt_Black Boots AI"
-        case (.darkBlue, .khaki,      .puma):         return "Dark Blue Shirt AI"
-        case (.darkBlue, .blackJeans, .barefoot):     return "Dark Blue Shirt_Black Jeans AI"
-        case (.darkBlue, .blackJeans, .blackChelsea): return "Dark Blue_Black Shirt_Black Boots AI"
-        case (.darkBlue, .blackJeans, .puma):         return "Dark Blue Shirt_Black Jeans_Puma Shoes AI"
-        case (.darkBlue, .blueJeans,  .barefoot):     return "Dark Blue Shirt_Blue Jeans AI"
-        case (.darkBlue, .blueJeans,  .blackChelsea): return "Dark Blue Shirt_Blue Jeans_Black Boots AI"
-        case (.darkBlue, .blueJeans,  .puma):         return "Dark Blue Shirt_Blue Jeans_Puma Shoes AI"
-        }
-    }
-
-    static func resolve(selections: [ClothingCategory: ClothingItem]) -> String {
-        let shirt  = shirtKey(for: selections[.top])
-        let bottom = bottomKey(for: selections[.bottom])
-        let shoes  = shoesKey(for: selections[.shoes])
-        return assetName(shirt: shirt, bottom: bottom, shoes: shoes)
-    }
-}
-
 // MARK: - UI Support: Shimmer Effect
 struct ShimmerView: View {
     @State private var startPoint: UnitPoint = .init(x: -1.8, y: -1.2)
@@ -127,28 +45,45 @@ struct ShimmerView: View {
 }
 
 // MARK: - OutfitView
+//
+// The Studio. The avatar is the person's own photo; every garment is fitted on
+// it once by the try-on service and kept as a layer (see V3_Final/TryOn).
+// Choosing garments here only stacks those layers, so it is instant.
 struct OutfitView: View {
     @EnvironmentObject var store: AppStore
+    @EnvironmentObject var tryOn: TryOnEngine
     @Binding var selectedTab: Int
     @Binding var previousTab: Int
     @State private var activeCategory: ClothingCategory? = nil
-    @State private var showAvatarMenu = false
     @State private var showCamera = false
     @State private var showPhotoLibrary = false
     @State private var showSaveOutfit  = false
-    @State private var processedComposite: UIImage? = nil
-    @State private var isProcessingComposite = false
-    @State private var processingStage: String = ""
-    @State private var processingProgress: CGFloat = 0
     @State private var showSavedBanner = false
     @State private var outfitCountBeforeSave = 0
+
+    @State private var displayed: UIImage? = nil        // the stacked layers
+    @State private var refined: UIImage? = nil          // the outfit generated in one go, on request
+    @State private var snapshot: UIImage? = nil         // what is saved with the outfit
+    @State private var isCuttingOut = false
+    @State private var isPreparingSnapshot = false
+    @State private var notice: String? = nil
 
     var sortedSelections: [(ClothingCategory, ClothingItem)] {
         store.selectedItems.sorted { $0.key.layerOrder < $1.key.layerOrder }
     }
 
-    var compositeAssetName: String {
-        TryOnLookup.resolve(selections: store.selectedItems)
+    private var selectedItems: [ClothingItem] { store.currentOutfitItems }
+
+    /// Changes whenever the picture on the canvas has to be put together again.
+    private var compositeKey: String {
+        let parts = selectedItems.map { item in
+            item.id.uuidString + (tryOn.statuses[item.id] == .ready ? ":1" : ":0")
+        }
+        return (tryOn.avatar?.id ?? "none") + "|" + parts.joined(separator: ",")
+    }
+
+    private var waitingCount: Int {
+        tryOn.statuses.values.filter { $0 == .queued || $0 == .generating }.count
     }
 
     var body: some View {
@@ -175,14 +110,14 @@ struct OutfitView: View {
             .sheet(isPresented: $showCamera) {
                 CameraPickerUIKit { image in
                     showCamera = false
-                    if let image { store.saveAvatar(image) }
+                    if let image { useAvatarPhoto(image) }
                 }
                 .ignoresSafeArea()
             }
             .sheet(isPresented: $showPhotoLibrary) {
                 PhotoLibraryPicker { image in
                     showPhotoLibrary = false
-                    if let image { store.saveAvatar(image) }
+                    if let image { useAvatarPhoto(image) }
                 }
             }
             .sheet(item: $activeCategory) { cat in
@@ -216,7 +151,7 @@ struct OutfitView: View {
                     }
                 }
             }) {
-                SaveOutfitSheet(snapshot: processedComposite)
+                SaveOutfitSheet(snapshot: snapshot)
                     .presentationDetents([.fraction(0.38)])
             }
             .overlay(alignment: .top) {
@@ -243,189 +178,279 @@ struct OutfitView: View {
                     .padding(.top, 8)
                 }
             }
+            .task {
+                // An avatar saved by an earlier version of the app becomes a studio avatar.
+                if tryOn.avatar == nil, let old = store.avatarImage {
+                    try? await tryOn.setAvatar(cutout: old, requirePose: false)
+                }
+                tryOn.sync(items: store.wardrobeItems)
+            }
         }
     }
+
+    // MARK: - Canvas
 
     var heroCanvas: some View {
-        GeometryReader { geo in
-            ZStack {
-                RoundedRectangle(cornerRadius: 28)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.blushLight, Color.blush, Color.petal],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
-                    )
+        ZStack {
+            // The same flat colour as the backdrop of the avatar, so the picture has no visible border.
+            RoundedRectangle(cornerRadius: 28)
+                .fill(Color.blushLight)
 
-                if store.avatarImage == nil {
-                    VStack(spacing: 14) {
-                        Image(systemName: "person.crop.rectangle.badge.plus")
-                            .font(.system(size: 44, weight: .light))
-                            .foregroundStyle(
-                                LinearGradient(colors: [.rose.opacity(0.6), .burgundy.opacity(0.5)],
-                                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                            )
-                        Text("Your mannequin photo\nwill appear here")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.mauve)
-                            .multilineTextAlignment(.center)
-                        Menu {
-                            Button { showCamera = true } label: {
-                                Label("Take Photo", systemImage: "camera")
-                            }
-                            Button { showPhotoLibrary = true } label: {
-                                Label("Choose from Library", systemImage: "photo.on.rectangle")
-                            }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "camera.fill")
-                                Text("Add My Photo")
-                                    .font(.system(size: 15, weight: .semibold))
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 12)
-                            .background(
-                                Capsule().fill(
-                                    LinearGradient(colors: [.burgundy, .rose],
-                                                   startPoint: .leading, endPoint: .trailing)
-                                )
-                            )
-                        }
-                    }
-                } else if isProcessingComposite, let previous = processedComposite {
-                    Image(uiImage: previous)
-                        .resizable()
-                        .scaledToFit()
-                        .padding(12)
-                        .blur(radius: 12)
-                        .opacity(0.4)
-                }
-
-                if store.avatarImage != nil, isProcessingComposite {
-                    VStack(spacing: 16) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.rose.opacity(0.12))
-                                .frame(width: 64, height: 64)
-                                .scaleEffect(processingProgress > 0.3 ? 1.2 : 1.0)
-                                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isProcessingComposite)
-
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 26, weight: .medium))
-                                .foregroundStyle(
-                                    LinearGradient(colors: [.burgundy, .rose], startPoint: .topLeading, endPoint: .bottomTrailing)
-                                )
-                                .symbolEffect(.pulse, isActive: isProcessingComposite)
-                        }
-
-                        Text(processingStage)
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
-                            .foregroundColor(Color.rose)
-                            .contentTransition(.numericText())
-
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(Color.blush)
-                                .frame(width: 140, height: 4)
-
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(
-                                    LinearGradient(colors: [.burgundy, .rose], startPoint: .leading, endPoint: .trailing)
-                                )
-                                .frame(width: 140 * processingProgress, height: 4)
-                                .animation(.easeInOut(duration: 0.3), value: processingProgress)
-                        }
-                    }
+            if isCuttingOut || tryOn.isPreparingAvatar {
+                busyCard("Preparing your avatar…")
+            } else if let avatar = tryOn.avatar {
+                Image(uiImage: refined ?? displayed ?? avatar.base)
+                    .resizable()
+                    .scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: 22))
+                    .padding(8)
+                    .interactive3DEffect()
                     .transition(.opacity)
-                } else if store.avatarImage != nil, let processed = processedComposite {
-                    Image(uiImage: processed)
-                        .resizable()
-                        .scaledToFit()
-                        .padding(12)
-                        .interactive3DEffect()
-                        .transition(.opacity.combined(with: .scale(scale: 0.97)))
-                } else if store.avatarImage != nil {
-                    Image(compositeAssetName)
-                        .resizable()
-                        .scaledToFit()
-                        .padding(12)
-                        .interactive3DEffect()
-                }
-            }
-            .padding(.horizontal, 16)
-            .animation(.easeInOut(duration: 0.35), value: isProcessingComposite)
-        }
-        .onAppear {
-            if store.avatarImage != nil {
-                processComposite(compositeAssetName, animated: false)
-            }
-        }
-        .onChange(of: compositeAssetName) { _, newName in
-            if store.avatarImage != nil {
-                processComposite(newName, animated: true)
-            }
-        }
-        .onChange(of: store.avatarImage) { _, newAvatar in
-            if newAvatar != nil {
-                processComposite(compositeAssetName, animated: true)
+                    .overlay(alignment: .topTrailing) { perfectFitButton.padding(16) }
+                    .overlay(alignment: .bottom) { statusArea.padding(14) }
             } else {
-                processedComposite = nil
-                isProcessingComposite = false
+                addPhotoPrompt
+            }
+        }
+        .padding(.horizontal, 16)
+        .animation(.easeInOut(duration: 0.25), value: compositeKey)
+        .task(id: compositeKey) {
+            refined = tryOn.cachedRender(items: selectedItems)
+            displayed = await tryOn.composite(items: selectedItems)
+        }
+    }
+
+    private func busyCard(_ text: String) -> some View {
+        VStack(spacing: 14) {
+            ProgressView()
+                .scaleEffect(1.3)
+                .tint(.burgundy)
+            Text(text)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundColor(.rose)
+        }
+    }
+
+    private var addPhotoPrompt: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "person.crop.rectangle.badge.plus")
+                .font(.system(size: 44, weight: .light))
+                .foregroundStyle(
+                    LinearGradient(colors: [.rose.opacity(0.6), .burgundy.opacity(0.5)],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                )
+            Text("Add a full-body photo of yourself")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.deepWine)
+            Text("Stand straight in front of a plain wall, whole body in the frame, arms slightly away from your body. Fitted clothes work best.")
+                .font(.system(size: 13))
+                .foregroundColor(.mauve)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 28)
+            if let notice {
+                Text(notice)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.burgundy)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 28)
+            }
+            Menu {
+                Button { showCamera = true } label: {
+                    Label("Take Photo", systemImage: "camera")
+                }
+                Button { showPhotoLibrary = true } label: {
+                    Label("Choose from Library", systemImage: "photo.on.rectangle")
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "camera.fill")
+                    Text("Add My Photo")
+                        .font(.system(size: 15, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .background(
+                    Capsule().fill(
+                        LinearGradient(colors: [.burgundy, .rose],
+                                       startPoint: .leading, endPoint: .trailing)
+                    )
+                )
             }
         }
     }
 
-    private func processComposite(_ assetName: String, animated: Bool) {
-        guard let sourceImage = UIImage(named: assetName) else { return }
+    // MARK: - Status of the garments on the avatar
 
-        let stages = ["Analyzing garment...", "Generating try-on...", "Refining fit..."]
-
-        if animated {
-            isProcessingComposite = true
-            processingProgress = 0
-            processingStage = stages[0]
-
-            Task {
-                try? await Task.sleep(nanoseconds: 400_000_000)
-                await MainActor.run {
-                    withAnimation { processingProgress = 0.35; processingStage = stages[1] }
+    @ViewBuilder
+    private var statusArea: some View {
+        VStack(spacing: 6) {
+            if !tryOn.isConfigured {
+                chip("The try-on service is not set up yet", icon: "wrench.and.screwdriver")
+            } else if !tryOn.hasConsent {
+                consentCard
+            } else {
+                ForEach(selectedItems) { item in
+                    statusChip(for: item)
                 }
-
-                let result = await ImagePreProcessor.removePersonBackground(sourceImage)
-
-                await MainActor.run {
-                    withAnimation { processingProgress = 0.75; processingStage = stages[2] }
-                }
-
-                try? await Task.sleep(nanoseconds: 350_000_000)
-                await MainActor.run {
-                    withAnimation { processingProgress = 1.0 }
-                }
-
-                try? await Task.sleep(nanoseconds: 200_000_000)
-                await MainActor.run {
-                    withAnimation(.easeInOut(duration: 0.4)) {
-                        processedComposite = result
-                        isProcessingComposite = false
-                        processingProgress = 0
+                if let reason = tryOn.pauseReason, waitingCount > 0 {
+                    Button { tryOn.resume() } label: {
+                        chip(reason, icon: "pause.circle")
                     }
+                    .buttonStyle(.plain)
                 }
             }
-        } else {
-            isProcessingComposite = true
-            processingStage = "Loading..."
-            processingProgress = 0.5
-            Task {
-                let result = await ImagePreProcessor.removePersonBackground(sourceImage)
-                await MainActor.run {
-                    withAnimation {
-                        processedComposite = result
-                        isProcessingComposite = false
-                        processingProgress = 0
-                    }
-                }
+            if let notice {
+                chip(notice, icon: "exclamationmark.triangle")
             }
+        }
+    }
+
+    @ViewBuilder
+    private func statusChip(for item: ClothingItem) -> some View {
+        switch tryOn.statuses[item.id] {
+        case .some(.queued), .some(.generating):
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small).tint(.burgundy)
+                Text("Fitting \(item.name) on you…")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.deepWine)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial, in: Capsule())
+        case .some(.failed(let message)):
+            Button { tryOn.retry(item) } label: {
+                chip("\(item.name): \(message)", icon: "arrow.clockwise")
+            }
+            .buttonStyle(.plain)
+        case .some(.unsupported):
+            chip("\(item.category.rawValue) can't be tried on yet", icon: "info.circle")
+        case .some(.ready), .none:
+            EmptyView()
+        }
+    }
+
+    private func chip(_ text: String, icon: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.burgundy)
+            Text(text)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.deepWine)
+                .multilineTextAlignment(.leading)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var consentCard: some View {
+        VStack(spacing: 10) {
+            Text("See your clothes on you")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(.deepWine)
+            Text("To dress your avatar, your avatar photo and the photos of your clothes are sent to the try-on service, which creates the images. Each garment is sent once.")
+                .font(.system(size: 12))
+                .foregroundColor(.mauve)
+                .multilineTextAlignment(.center)
+            Button { tryOn.hasConsent = true } label: {
+                Text("Allow and continue")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 10)
+                    .background(
+                        Capsule().fill(
+                            LinearGradient(colors: [.burgundy, .rose],
+                                           startPoint: .leading, endPoint: .trailing)
+                        )
+                    )
+            }
+        }
+        .padding(16)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+    }
+
+    /// Generates the whole outfit in one go, for hems and waistbands that meet naturally.
+    @ViewBuilder
+    private var perfectFitButton: some View {
+        let cost = tryOn.renderCost(items: selectedItems)
+        if tryOn.isConfigured, tryOn.hasConsent, cost > 0, refined == nil {
+            Button {
+                Task { await perfectFit() }
+            } label: {
+                HStack(spacing: 6) {
+                    if tryOn.isRendering {
+                        ProgressView().controlSize(.small).tint(.white)
+                    } else {
+                        Image(systemName: "sparkles")
+                    }
+                    Text(tryOn.isRendering ? "Refining…" : "Perfect fit")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule().fill(
+                        LinearGradient(colors: [.burgundy, .rose],
+                                       startPoint: .leading, endPoint: .trailing)
+                    )
+                )
+            }
+            .disabled(tryOn.isRendering)
+        }
+    }
+
+    private func perfectFit() async {
+        notice = nil
+        let items = selectedItems
+        let key = compositeKey
+        do {
+            let image = try await tryOn.render(items: items)
+            if key == compositeKey { refined = image }       // the selection may have changed meanwhile
+        } catch {
+            notice = error.localizedDescription
+        }
+    }
+
+    // MARK: - Avatar photo
+
+    private func useAvatarPhoto(_ image: UIImage) {
+        notice = nil
+        isCuttingOut = true
+        Task {
+            let cutout = await ImagePreProcessor.removePersonBackground(image)
+            isCuttingOut = false
+            do {
+                try await tryOn.setAvatar(cutout: cutout)
+                store.saveAvatar(cutout)
+            } catch {
+                notice = error.localizedDescription
+            }
+        }
+    }
+
+    private func removeAvatar() {
+        store.deleteAvatar()
+        tryOn.removeAvatar()
+        displayed = nil
+        refined = nil
+    }
+
+    private func saveTapped() {
+        isPreparingSnapshot = true
+        Task {
+            // Saved outfits are shown as cut-outs everywhere else in the app.
+            if let picture = refined ?? displayed {
+                snapshot = await ImagePreProcessor.removePersonBackground(picture)
+            } else {
+                snapshot = nil
+            }
+            isPreparingSnapshot = false
+            showSaveOutfit = true
         }
     }
 
@@ -490,9 +515,13 @@ struct OutfitView: View {
     }
 
     var confirmButton: some View {
-        Button(action: { showSaveOutfit = true }) {
+        Button(action: saveTapped) {
             HStack {
-                Image(systemName: "checkmark.circle.fill")
+                if isPreparingSnapshot {
+                    ProgressView().tint(.white)
+                } else {
+                    Image(systemName: "checkmark.circle.fill")
+                }
                 Text("Save Outfit").font(.system(size: 17, weight: .bold))
             }
             .foregroundColor(.white)
@@ -506,7 +535,7 @@ struct OutfitView: View {
                             : AnyShapeStyle(LinearGradient(colors: [.burgundy, .rose], startPoint: .leading, endPoint: .trailing))
                     )
             )
-        }.disabled(store.selectedItems.isEmpty)
+        }.disabled(store.selectedItems.isEmpty || isPreparingSnapshot)
     }
 
     @ToolbarContentBuilder
@@ -533,10 +562,10 @@ struct OutfitView: View {
                     Button { showPhotoLibrary = true } label: {
                         Label("Choose from Library", systemImage: "photo.on.rectangle")
                     }
-                    if store.avatarImage != nil {
+                    if tryOn.avatar != nil || store.avatarImage != nil {
                         Divider()
                         Button(role: .destructive) {
-                            withAnimation { store.deleteAvatar() }
+                            withAnimation { removeAvatar() }
                         } label: {
                             Label("Remove Avatar", systemImage: "trash")
                         }

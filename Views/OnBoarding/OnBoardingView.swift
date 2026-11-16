@@ -28,6 +28,7 @@ private extension Color {
 // MARK: - Main Onboarding View
 struct OnboardingView: View {
     @EnvironmentObject var store: AppStore
+    @EnvironmentObject var tryOn: TryOnEngine
 
     @AppStorage("userName") private var userName: String = ""
     @AppStorage("isFirstLaunchh") private var isFirstLaunch: Bool = true
@@ -39,6 +40,7 @@ struct OnboardingView: View {
     @State private var showLibrary = false
     @State private var processedImage: UIImage? = nil
     @State private var isProcessing = false
+    @State private var avatarHint: String? = nil
 
     // Animation states
     @State private var animateGlow = false
@@ -162,10 +164,14 @@ struct OnboardingView: View {
     // MARK: - Process Avatar
     private func processAvatar(_ image: UIImage) {
         isProcessing = true
+        avatarHint = nil
         Task {
             let result = await ImagePreProcessor.removePersonBackground(image)
+            // Tell the person right away if this photo will not work well for try-on.
+            let hint = await tryOn.avatarHint(for: result)
             await MainActor.run {
                 processedImage = result
+                avatarHint = hint
                 isProcessing = false
             }
         }
@@ -377,7 +383,7 @@ struct OnboardingView: View {
                                        startPoint: .leading, endPoint: .trailing)
                     )
 
-                Text("Take a full-body photo in good lighting\nto try on clothes perfectly")
+                Text("Take a full-body photo in good lighting:\nstand straight, arms slightly away from your body")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.mauve)
                     .multilineTextAlignment(.center)
@@ -482,9 +488,16 @@ struct OnboardingView: View {
                 .padding(.horizontal, 30)
             } else {
                 VStack(spacing: 12) {
+                    if let avatarHint {
+                        Text(avatarHint)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.burgundy)
+                            .multilineTextAlignment(.center)
+                    }
                     Button {
                         if let img = processedImage {
                             store.saveAvatar(img)
+                            Task { try? await tryOn.setAvatar(cutout: img, requirePose: false) }
                             withAnimation { isFirstLaunch = false }
                         }
                     } label: {
@@ -497,7 +510,7 @@ struct OnboardingView: View {
                     }
                     .modifier(PrimaryOnboardingButton(colors: [.green, .emerald]))
 
-                    Button { processedImage = nil } label: {
+                    Button { processedImage = nil; avatarHint = nil } label: {
                         Text("Try a different photo")
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(.mauve)

@@ -29,3 +29,8 @@ GoogleService-Info.plist
 
 # Archives
 *.zip
+__pycache__/
+*.pyc
+.pytest_cache/
+backend/.env
+backend/weights/

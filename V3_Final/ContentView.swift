@@ -2,11 +2,23 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var store: AppStore
+    @EnvironmentObject var tryOn: TryOnEngine
     @State private var selectedTab = 0
     @State private var previousTab = 0
     @AppStorage("isFirstLaunchh") private var isFirstLaunch = true
 
     var body: some View {
+        content
+            // Every garment added to the closet is fitted on the avatar once;
+            // deleted garments lose their layer.
+            .task { tryOn.sync(items: store.wardrobeItems) }
+            .onChange(of: store.wardrobeItems.map(\.id)) { _, _ in
+                tryOn.sync(items: store.wardrobeItems)
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if isFirstLaunch {
             OnboardingView()
         } else {

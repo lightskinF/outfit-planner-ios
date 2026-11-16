@@ -352,7 +352,34 @@ struct ClosetView: View {
 // MARK: - Closet Item Card
 struct ClosetItemCard: View {
     @EnvironmentObject var store: AppStore
+    @EnvironmentObject var tryOn: TryOnEngine
     let item: ClothingItem
+
+    /// A small mark telling whether the garment is ready to be worn by the avatar.
+    @ViewBuilder
+    private var tryOnBadge: some View {
+        switch tryOn.statuses[item.id] {
+        case .some(.ready):
+            Image(systemName: "sparkles")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.white)
+                .padding(6)
+                .background(Color.burgundy, in: Circle())
+        case .some(.queued), .some(.generating):
+            ProgressView()
+                .controlSize(.small)
+                .padding(6)
+                .background(.ultraThinMaterial, in: Circle())
+        case .some(.failed):
+            Image(systemName: "exclamationmark")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.white)
+                .padding(7)
+                .background(Color.mauve, in: Circle())
+        case .some(.unsupported), .none:
+            EmptyView()
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -377,6 +404,7 @@ struct ClosetItemCard: View {
             }
             .frame(height: 190)
             .clipped()
+            .overlay(alignment: .topTrailing) { tryOnBadge.padding(8) }
             .clipShape(UnevenRoundedRectangle(topLeadingRadius: 16, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 16))
             .interactive3DEffect(maxAngle: 10, enableShadow: false, enableHighlight: true)
 
