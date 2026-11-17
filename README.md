@@ -9,7 +9,7 @@ Demo video: [https://youtube.com/shorts/cQxEbVqXol0]
 
 ## Why I wanted to build this
 
-Every morning I lose time deciding what to wear, and half the wardrobe ends up on the bed. When I looked into it I found I was not alone: the research I read describes the morning outfit choice as a recurring source of stress, at the time of day when cortisol is already at its peak. [[add 1-2 references]]
+Every morning I lose time deciding what to wear, and half the wardrobe ends up on the bed. When I looked into it I found I was not alone: the research I read describes the morning outfit choice as a recurring source of stress, at the time of day when cortisol is already at its peak. 
 
 So the idea is simple. Decide the evening before, or days ahead, when you are calm. Keep your wardrobe on your phone, see the clothes on an avatar of yourself without pulling anything out of the closet, and assign each outfit to a day or an occasion: the office, school, a dinner.
 
